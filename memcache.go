@@ -94,6 +94,19 @@ func (self *Connection) Cas(key string, flags uint16, timeout uint64, value []by
 	return self.store("cas", key, flags, timeout, value, cas), nil
 }
 
+func (self *Connection) Version() (version string, err error) {
+    defer handleError(&err)
+    self.writestrings("version\r\n")
+    reply := self.readline()
+    if strings.Contains(reply, "ERROR") {
+        panic(NewMemcacheError("Server error"))
+    }
+    if !strings.HasPrefix(reply, "VERSION ") {
+        panic(NewMemcacheError("%v", reply))
+    }
+    return strings.Split(reply, " ")[1], nil
+}
+
 func (self *Connection) Delete(key string) (deleted bool, err error) {
 	defer handleError(&err)
 	// delete <key> [<time>] [noreply]\r\n

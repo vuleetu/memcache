@@ -10,8 +10,13 @@ import (
 	"time"
 )
 
+const (
+    MemcVersion  = "1.4.15"
+    MemcSockPath = "/tmp/memc.sock"
+)
+
 func TestMemcache(t *testing.T) {
-	cmd := exec.Command("memcached", "-s", "/tmp/vtocc_cache.sock")
+	cmd := exec.Command("memcached", "-s", MemcSockPath)
 	if err := cmd.Start(); err != nil {
 		t.Errorf("Memcache start: %v", err)
 		return
@@ -19,7 +24,7 @@ func TestMemcache(t *testing.T) {
 	defer cmd.Process.Kill()
 	time.Sleep(time.Second)
 
-	c, err := Connect("/tmp/vtocc_cache.sock")
+	c, err := Connect(MemcSockPath)
 	if err != nil {
 		t.Errorf("Connect: %v", err)
 		return
@@ -151,7 +156,7 @@ func TestMemcache(t *testing.T) {
 	if err != nil {
 		t.Errorf("Set: %v", err)
 		return
-	}
+	} 
 	expect(t, c, "Data", "Changed")
 	stored, err = c.Set("Data", 0, 0, []byte("Overwritten"))
 	if err != nil {
@@ -175,6 +180,15 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("Stats: %v", err)
 		return
 	}
+	// version
+    v, err := c.Version()
+	if err != nil {
+        t.Errorf("Version: %v", err)
+        return
+    }
+    if v != MemcVersion {
+        t.Errorf("Version: %v", v)
+    }
 }
 
 func expect(t *testing.T, c *Connection, key, value string) {
