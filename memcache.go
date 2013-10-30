@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+    "math/rand"
 	"strconv"
 	"strings"
 )
@@ -16,9 +17,19 @@ import (
 type Connection struct {
 	conn     net.Conn
 	buffered bufio.ReadWriter
+    has_error bool
 }
 
-func Connect(address string) (conn *Connection, err error) {
+func Connect(addresses ...string) (conn *Connection, err error) {
+    if len(addresses) == 0 {
+        return nil, fmt.Errorf("Invalid addresses")
+    }
+
+    idx := rand.Intn(len(addresses))
+
+    address := addresses[idx]
+    fmt.Println("Memcache address is", address)
+
 	var network string
 	if strings.Contains(address, "/") {
 		network = "unix"
@@ -52,50 +63,54 @@ func (self *Connection) IsClosed() bool {
 	return self.conn == nil
 }
 
+func (self *Connection) HasError() bool {
+    return self.has_error
+}
+
 func (self *Connection) Get(key string) (value []byte, flags uint16, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	value, flags, _ = self.get("get", key)
 	return
 }
 
 func (self *Connection) Gets(key string) (value []byte, flags uint16, cas uint64, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	value, flags, cas = self.get("gets", key)
 	return
 }
 
 func (self *Connection) Set(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	return self.store("set", key, flags, timeout, value, 0), nil
 }
 
 func (self *Connection) Add(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	return self.store("add", key, flags, timeout, value, 0), nil
 }
 
 func (self *Connection) Replace(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	return self.store("replace", key, flags, timeout, value, 0), nil
 }
 
 func (self *Connection) Append(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	return self.store("append", key, flags, timeout, value, 0), nil
 }
 
 func (self *Connection) Prepend(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	return self.store("prepend", key, flags, timeout, value, 0), nil
 }
 
 func (self *Connection) Cas(key string, flags uint16, timeout uint64, value []byte, cas uint64) (stored bool, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	return self.store("cas", key, flags, timeout, value, cas), nil
 }
 
 func (self *Connection) Version() (version string, err error) {
-    defer handleError(&err)
+	defer handleError(self, &err)
     self.writestrings("version\r\n")
     reply := self.readline()
     if strings.Contains(reply, "ERROR") {
@@ -108,7 +123,7 @@ func (self *Connection) Version() (version string, err error) {
 }
 
 func (self *Connection) Delete(key string) (deleted bool, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	// delete <key> [<time>] [noreply]\r\n
 	self.writestrings("delete ", key, "\r\n")
 	reply := self.readline()
@@ -119,7 +134,7 @@ func (self *Connection) Delete(key string) (deleted bool, err error) {
 }
 
 func (self *Connection) Stats(argument string) (result []byte, err error) {
-	defer handleError(&err)
+	defer handleError(self, &err)
 	if argument == "" {
 		self.writestrings("stats\r\n")
 	} else {
@@ -256,8 +271,9 @@ func (self MemcacheError) Error() string {
 	return self.Message
 }
 
-func handleError(err *error) {
+func handleError(c *Connection, err *error) {
 	if x := recover(); x != nil {
 		*err = x.(MemcacheError)
+        c.has_error = true
 	}
 }
